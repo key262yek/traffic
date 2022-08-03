@@ -8,14 +8,14 @@ pub enum TrafficItem<'a> {
 }
 
 impl<'a> TrafficItem<'a> {
-    fn pos(&self) -> &Cartessian1D<f64> {
+    pub fn pos(&self) -> &Cartessian1D<f64> {
         match self{
             TrafficItem::Car(c) => &c.pos,
             TrafficItem::Flag(f) => &f.pos
         }
     }
 
-    fn set_max_speed(&self, other : &mut Self) {
+    pub fn set_max_speed(&self, other : &mut Self) {
         match (self, other) {
             (TrafficItem::Flag(f), TrafficItem::Car(c)) => {
                 f.set_max_speed(c);
@@ -24,6 +24,51 @@ impl<'a> TrafficItem<'a> {
         }
     }
 }
+
+pub struct TrafficList<'a> {
+    items : Vec<TrafficItem<'a>>,
+}
+
+impl<'a> TrafficList<'a>{
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    pub fn new(items : Vec<TrafficItem<'a>>) -> Self{
+        Self{
+            items,
+        }
+    }
+
+    pub fn check_switch(&mut self, i : usize, speed_limit : f64){
+        if i == 0 || i >= self.len(){
+            panic!("Invalid index input : index {} should be in 1..{}", i, self.len());
+        }
+
+        if let TrafficItem::Flag(f) = self.items[i].clone(){
+            if let TrafficItem::Car(mut c) = self.items[i - 1].clone(){
+                if f.pos() < c.pos(){
+                    f.set_max_speed(&mut c);
+                    if !f.status{
+                        assert!(c.vel[0] < speed_limit * 1.1);
+                    }
+                    self.items[i] = TrafficItem::Car(c);
+                    self.items[i - 1] = TrafficItem::Flag(f);
+                }
+            }
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &TrafficItem<'a>> {
+        self.items.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut TrafficItem<'a>> {
+        self.items.iter_mut()
+    }
+}
+
+
 
 #[derive(Debug, Serialize, Deserialize, State, Clone)]
 pub struct Car {
@@ -224,14 +269,15 @@ mod tests {
         let speedcam = SpeedCam::new(Cartessian1D::new([500f64]), 5f64, 100f64, false);
         let (open, close) = speedcam.flags();
 
-        let mut items : Vec<TrafficItem> = vec![
+        let items : Vec<TrafficItem> = vec![
             TrafficItem::Car(Car::new(0, 1f64, 10f64, 1f64, 0f64, 10f64)),
             TrafficItem::Flag(open),
             TrafficItem::Flag(close),
         ];
+        let mut trafficlist = TrafficList::new(items);
 
         for (_t, dt) in timeiter.into_diff() {
-            for item in items.iter_mut(){
+            for item in trafficlist.iter_mut(){
                 match item {
                     TrafficItem::Car(c) => {
                         let force = c.drift_force();
@@ -242,19 +288,8 @@ mod tests {
                 }
             }
 
-            for i in 1..items.len() {
-                if let TrafficItem::Flag(f) = items[i].clone(){
-                    if let TrafficItem::Car(mut c) = items[i - 1].clone(){
-                        if f.pos() < c.pos(){
-                            f.set_max_speed(&mut c);
-                            if !f.status{
-                                assert!(c.vel[0] < speedcam.speed_limit * 1.1);
-                            }
-                            items[i] = TrafficItem::Car(c);
-                            items[i - 1] = TrafficItem::Flag(f);
-                        }
-                    }
-                }
+            for i in 1..trafficlist.len() {
+                trafficlist.check_switch(i, speedcam.speed_limit);
             }
         }
     }
