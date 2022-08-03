@@ -6,3 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+moldybrody={path="../moldybrody"}
+serde="1.0"
+
+
+[dev-dependencies]
+approx = {version = "0.5.0", features = ["num-complex"]}
